@@ -1,5 +1,11 @@
 import networkx as nx
 import matplotlib.pyplot as plt
+import random
+import pandas as pd
+
+# -----------------------------------------------------------------------------------
+
+# Funções auxiliares 
 
 def check_dominante(dominante, G):
     dominados = set(dominante)
@@ -7,98 +13,164 @@ def check_dominante(dominante, G):
         dominados.update(G.neighbors(v))
     return dominados == set(G.nodes)
 
-# Greedy Insertion Procedure
+def melhoria_local(dominante, G):
+    improved = True
+    while improved:
+        improved = False
+        for u in list(dominante):
+            for v in (set(G.nodes) - dominante):
+                novo_dominante = (dominante - {u}) | {v}
+                if check_dominante(novo_dominante, G) and len(novo_dominante) < len(dominante):
+                    dominante = novo_dominante
+                    improved = True
+                    break
+            if improved:
+                break
+    return dominante
+
+def seleciona_vertice_pra_deletar_aleatorio(D):
+    return random.choice(list(D))
+
+def seleciona_maior_dominante(D, G):
+    undominated = set(G.nodes) - {v for u in D for v in G.neighbors(u)}
+    best_vertex = max(undominated, key=lambda v: len(set(G.neighbors(v)) - D))
+    return best_vertex
+
+# -----------------------------------------------------------------------------------
+
+# Inserção Inicial Gulosa (GIP)
 def insercao_inicial_gulosa(G):
     v_folhas = {v for v in G.nodes if len(list(G.neighbors(v))) == 1}
     v_suporte = {u for v in v_folhas for u in G.neighbors(v)}
 
     dominante = v_suporte.copy()
 
-    # Função gulosa gGIP(v): calcula a contribuição de um vértice v
     def gGIP(v, dominant):
-        # Contribuição é o número de vértices adjacentes a v que não são dominados por D
         N_v = set(G.neighbors(v)) | {v}
         N_dominantes = set(neighbor for u in dominant for neighbor in G.neighbors(u)) | dominant
         return len(N_v - N_dominantes)
 
-    # Seleciona vértices iterativamente até que D se torne um conjunto dominante
     while not check_dominante(dominante, G):
-        # Seleciona o vértice com a maior contribuição gulosa que não está em D nem em L
         candidates = (v for v in G.nodes if v not in dominante and v not in v_folhas)
         v_best = max(candidates, key=lambda v: gGIP(v, dominante))
         dominante.add(v_best)
-    print(dominante)
-
     return dominante
 
+# Exclusão Inicial Gulosa (GDP)
+def exclusao_inicial_gulosa(G):
+    dominante = set(G.nodes)
+    
+    def gGDP(v, dominant):
+        return sum(1 for neighbor in G.neighbors(v) if all(neighbor not in G.neighbors(u) for u in (dominant - {v})))
+    
+    while check_dominante(dominante, G):
+        v_best = min(dominante, key=lambda v: gGDP(v, dominante))
+        dominante.remove(v_best)
+        if not check_dominante(dominante, G):
+            dominante.add(v_best)
+            break
+    return dominante
 
-def InitialSolution(G):
-    pass
+# Funções de Destruição
+def destruicao(D, beta):
+    D_d = D.copy()
+    num_to_remove = int(beta * len(D))
+    for _ in range(num_to_remove):
+        v = seleciona_vertice_pra_deletar_aleatorio(D_d)
+        D_d.remove(v)
+    return D_d
 
-def LocalImprovement(D):
-    pass
+def destruicao_gulosa(dominant, G, beta):
+    num_to_remove = int(beta * len(dominant))
+    
+    def vertex_contribution(v, dominant):
+        return sum(
+            any(neighbor in G.neighbors(w) for w in (dominant - {v})) for neighbor in G.neighbors(v)
+        )
+    
+    vertices_sorted = sorted(dominant, key=lambda v: vertex_contribution(v, dominant))
+    
+    for v in vertices_sorted[:num_to_remove]: 
+        dominant.remove(v)
+    
+    return dominant
 
-def Destruction(D, beta):
-    pass
+# Função de Reconstrução
+def reconstrucao(dominante_v_deletado, G):
+    dominante_reconstruido = dominante_v_deletado.copy()
+    while not check_dominante(dominante_reconstruido, G):
+        v = seleciona_maior_dominante(dominante_reconstruido, G)
+        dominante_reconstruido.add(v)
+    return dominante_reconstruido
 
-def Reconstruction(D):
-    pass
+# Algoritmo IG
+def IG(G, beta, delta_max, init_method, destruction_method):
+    if init_method == 'GIP':
+        dominante = insercao_inicial_gulosa(G)
+    elif init_method == 'GDP':
+        dominante = exclusao_inicial_gulosa(G)
+    
+    dominante_melhorado = melhoria_local(dominante, G)
+    delta = 0
 
+    while delta < delta_max:
+        if destruction_method == destruicao_gulosa:
+            print("SSSSSSSSSSSSSSSSSS")
+            dominante_v_deletado = destruction_method(dominante_melhorado, G, beta)
+        else:
+            print("AAAAAAAAAAAAA")
+            dominante_v_deletado = destruction_method(dominante_melhorado, beta)
 
-# Algoritimo base do Iterated greddy descrito no pseudocódigo
-"""
-    - G -> um grafo de entrada
-    - beta -> a porcentagem de vértices removidos na fase de destruição
-    - delta_max -> Número máximo de iterações sem melhoria que IG permite realizar.
-"""
-# def IG(G, beta, delta_max):
-#     dominante = insercao_inicial_gulosa(G)
-#     D_b = LocalImprovement(dominante)
-#     delta = 0;
-#
-#     while delta < delta_max:
-#         D_d = Destruction(D_b, beta)
-#         D_r = Reconstruction(D_d)
-#         D_i = LocalImprovement(D_r)
-#
-#         if len(D_i) < len(D_b):3
-#             D_b = D_i
-#             delta = 0
-#         else:
-#             delta += 1
-#     return D_b
+        dominante_reconstruido = reconstrucao(dominante_v_deletado, G)
+        dominante_ideal = melhoria_local(dominante_reconstruido, G)
 
+        if len(dominante_ideal) < len(dominante_melhorado):
+            dominante_melhorado = dominante_ideal
+            delta = 0
+        else:
+            delta += 1
+    return dominante_melhorado
 
-
-
-
-
-
-# Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    G = nx.Graph()
+    G = nx.erdos_renyi_graph(10, 0.2)
+    beta = 0.2
+    delta_max = 5
 
-    # Adicionando arestas para formar folhas e suportes
-    edges = [
-        (1, 2), (1, 3),  # Vértices de suporte: 1
-        (4, 1),  # Vértice folha: 4
-        (5, 1),  # Vértice folha: 5
-        (6, 7),  # Vértices de suporte: 6
-        (8, 6),  # Vértice folha: 8
-        (9, 7),  # Vértice folha: 9
-        (10, 7),  # Vértice folha: 10
-        (3, 11), (3, 12),  # Outros vértices conectados a 3
-        (7, 13)  # Conexão extra
+    scenarios = [
+        ('GIP', destruicao),
+        ('GIP', destruicao_gulosa),
+        ('GDP', destruicao),
+        ('GDP', destruicao_gulosa)
     ]
+    
+    fig, axes = plt.subplots(len(scenarios), 3, figsize=(15, 5 * len(scenarios)))
+    pos = nx.spring_layout(G)
+    
+    results = []
+    
+    for i, (init_method, destruction_method) in enumerate(scenarios):
+        if init_method == 'GIP':
+            D_initial = insercao_inicial_gulosa(G)
+        elif init_method == 'GDP':
+            D_initial = exclusao_inicial_gulosa(G)
 
-    # Adiciona as arestas ao grafo
-    G.add_edges_from(edges)
+        D_final = IG(G, beta, delta_max, init_method, destruction_method)
 
-    nx.draw(G, with_labels=True)
-    plt.show()
+        results.append((init_method, destruction_method.__name__, len(D_initial), len(D_final)))
+        
+        nx.draw(G, pos, with_labels=True, font_weight='bold', ax=axes[i, 0])
+        axes[i, 0].set_title(f'Grafo Original ({init_method} + {destruction_method.__name__})')
 
-    # Testando a função de solução inicial
-    D_initial = insercao_inicial_gulosa(G)
-    print("Conjunto dominante inicial:", D_initial)
+        nx.draw_networkx_nodes(G, pos, nodelist=D_initial, node_color='red', node_size=200, ax=axes[i, 1])
+        nx.draw_networkx_edges(G, pos, ax=axes[i, 1])
+        axes[i, 1].set_title('Solução Inicial')
 
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
+        nx.draw_networkx_nodes(G, pos, nodelist=D_final, node_color='green', node_size=200, ax=axes[i, 2])
+        nx.draw_networkx_edges(G, pos, ax=axes[i, 2])
+        axes[i, 2].set_title('Solução Final')
+
+    plt.tight_layout()
+    plt.savefig("resultado.png")
+
+    df_results = pd.DataFrame(results, columns=['Método Inicial', 'Método de Destruição', 'Tamanho Inicial', 'Tamanho Final'])
+    print(df_results)
