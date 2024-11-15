@@ -99,8 +99,19 @@ def destruicao_gulosa(dominant, G, beta):
 def reconstrucao(dominante_v_deletado, G):
     dominante_reconstruido = dominante_v_deletado.copy()
     while not check_dominante(dominante_reconstruido, G):
+        # Seleciona o vértice a ser adicionado
         v = seleciona_maior_dominante(dominante_reconstruido, G)
-        dominante_reconstruido.add(v)
+        
+        # Verifica se o vértice selecionado já está no conjunto
+        if v not in dominante_reconstruido:
+            dominante_reconstruido.add(v)
+        else:
+            print(f"Vértice {v} já está no conjunto dominante.")
+            break  # Evita loop infinito se a função não encontrar um vértice válido
+        
+        # Depuração: Verificar o estado do conjunto dominante
+        print(f"Dominante reconstruído: {dominante_reconstruido}")
+        
     return dominante_reconstruido
 
 # Algoritmo IG
@@ -115,13 +126,15 @@ def IG(G, beta, delta_max, init_method, destruction_method):
 
     while delta < delta_max:
         if destruction_method == destruicao_gulosa:
+            dominante_v_deletado = destruicao_gulosa(dominante_melhorado, G, beta)
             print("SSSSSSSSSSSSSSSSSS")
-            dominante_v_deletado = destruction_method(dominante_melhorado, G, beta)
         else:
+            dominante_v_deletado = destruicao(dominante_melhorado, beta)
             print("AAAAAAAAAAAAA")
-            dominante_v_deletado = destruction_method(dominante_melhorado, beta)
+            print(dominante_v_deletado)
 
         dominante_reconstruido = reconstrucao(dominante_v_deletado, G)
+        print("aaa")
         dominante_ideal = melhoria_local(dominante_reconstruido, G)
 
         if len(dominante_ideal) < len(dominante_melhorado):
@@ -132,9 +145,9 @@ def IG(G, beta, delta_max, init_method, destruction_method):
     return dominante_melhorado
 
 if __name__ == '__main__':
-    G = nx.erdos_renyi_graph(10, 0.2)
+    G = nx.erdos_renyi_graph(15, 0.3)
     beta = 0.2
-    delta_max = 5
+    delta_max = 10
 
     scenarios = [
         ('GIP', destruicao),
